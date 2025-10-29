@@ -5,7 +5,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import com.itextpdf.text.pdf.PdfReader;
+
 import java.io.File;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,9 +17,11 @@ public class PdfCheckerRunner implements CommandLineRunner {
 
     private static final Logger logger = LoggerFactory.getLogger(PdfCheckerRunner.class);
     private final PdfDiscrepancyChecker checker;
+    private final OcgLayerCheckService ocgLayerCheckService;
 
-    public PdfCheckerRunner(PdfDiscrepancyChecker checker) {
+    public PdfCheckerRunner(PdfDiscrepancyChecker checker, OcgLayerCheckService ocgLayerCheckService) {
         this.checker = checker;
+        this.ocgLayerCheckService = ocgLayerCheckService;
     }
 
     @Override
@@ -60,7 +65,46 @@ public class PdfCheckerRunner implements CommandLineRunner {
             copyResults.add(copyResult);
             System.out.println(copyResult);
             System.out.println();
-            
+
+            // Check 3: OCG layer
+            try (FileInputStream fis = new FileInputStream(pdfFile)) {
+                PdfReader reader = new PdfReader(fis);
+                OcgLayerCheckResult ocg = ocgLayerCheckService.check(reader);
+                reader.close();
+
+                System.out.println();
+                System.out.println("=== Check 3: OCG layers ===");
+                if (ocg.error != null) {
+                    System.out.println("OCG check error: " + ocg.error);
+                } else if (!ocg.hasLayers) {
+                    System.out.println("Has OCG layers: NO");
+                } else {
+                    System.out.println("Has OCG layers: YES");
+                    System.out.println("Layer count: " + ocg.layerCount);
+                    System.out.println("Base state: " + (ocg.baseState != null ? ocg.baseState : "Default (ON)"));
+                    System.out.println("Custom order: " + (ocg.hasCustomOrder ? "YES" : "NO"));
+                    System.out.println("Locked layers: " + (ocg.hasLockedLayers ? "YES" : "NO"));
+
+                    if (!ocg.layers.isEmpty()) {
+                        System.out.println("Layers:");
+                        for (LayerInfo li : ocg.layers) {
+                            String nm = li.name != null ? li.name : "(Unnamed)";
+                            String st = li.defaultState != null ? li.defaultState : "?";
+                            String in = li.intent != null ? (" intent=" + li.intent) : "";
+                            System.out.println("  • " + nm + " [" + st + "]" + in);
+                        }
+                    }
+                    if (!ocg.pageLayerUsage.isEmpty()) {
+                        System.out.println("Pages using layers:");
+                        ocg.pageLayerUsage.forEach((p, set) ->
+                            System.out.println("  Page " + p + ": " + String.join(", ", set)));
+                    }
+                    System.out.println("WARNING: This PDF contains OCG layers; stamping overlays or merging with OCG-based page numbers can conflict with existing layers.");
+                }
+            } catch (Exception ex) {
+                System.out.println("OCG check failed: " + ex.getMessage());
+            }
+
             logger.info("=".repeat(90) + "\n");
         }
         

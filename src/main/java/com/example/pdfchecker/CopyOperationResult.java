@@ -1,6 +1,5 @@
 package com.example.pdfchecker;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class CopyOperationResult {
