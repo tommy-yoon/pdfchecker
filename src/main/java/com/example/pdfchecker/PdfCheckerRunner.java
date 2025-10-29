@@ -29,7 +29,8 @@ public class PdfCheckerRunner implements CommandLineRunner {
             return;
         }
 
-        List<DiscrepancyResult> results = new ArrayList<>();
+        List<DiscrepancyResult> structureResults = new ArrayList<>();
+        List<CopyOperationResult> copyResults = new ArrayList<>();
         
         for (String filePath : args) {
             File pdfFile = new File(filePath);
@@ -44,21 +45,39 @@ public class PdfCheckerRunner implements CommandLineRunner {
                 continue;
             }
             
-            logger.info("Checking: {}", pdfFile.getName());
-            DiscrepancyResult result = checker.checkPdfDiscrepancy(pdfFile);
-            results.add(result);
-            System.out.println(result);
+            logger.info("Checking: {}\n", pdfFile.getName());
+            
+            // Check 1: Page tree structure discrepancy
+            logger.info("--- Check 1: Page Tree Structure ---");
+            DiscrepancyResult structureResult = checker.checkPdfDiscrepancy(pdfFile);
+            structureResults.add(structureResult);
+            System.out.println(structureResult);
             System.out.println();
+            
+            // Check 2: PdfCopy internal state tracking
+            logger.info("--- Check 2: PdfCopy Internal State Tracking ---");
+            CopyOperationResult copyResult = checker.checkPdfCopyOperation(pdfFile);
+            copyResults.add(copyResult);
+            System.out.println(copyResult);
+            System.out.println();
+            
+            logger.info("=".repeat(90) + "\n");
         }
         
         // Summary
-        long discrepancyCount = results.stream()
+        long structureDiscrepancyCount = structureResults.stream()
             .filter(DiscrepancyResult::hasDiscrepancy)
+            .count();
+            
+        long copyMismatchCount = copyResults.stream()
+            .filter(CopyOperationResult::hasMismatch)
             .count();
         
         logger.info("=== Summary ===");
-        logger.info("Total files checked: {}", results.size());
-        logger.info("Files with discrepancy: {}", discrepancyCount);
-        logger.info("Files without discrepancy: {}", results.size() - discrepancyCount);
+        logger.info("Total files checked: {}", structureResults.size());
+        logger.info("Files with page tree discrepancy: {}", structureDiscrepancyCount);
+        logger.info("Files with PdfCopy state mismatch: {}", copyMismatchCount);
+        logger.info("Files without issues: {}", 
+                   structureResults.size() - structureDiscrepancyCount - copyMismatchCount);
     }
 }
